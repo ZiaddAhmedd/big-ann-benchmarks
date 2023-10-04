@@ -82,7 +82,8 @@ class BinarySignatures:
         while index < nbits:
             # print("index: ",index, "nbits", nbits)
             if count + step > meta_b.shape[1]:
-                step = int(meta_b.shape[1] - count)
+                pass
+                # step = int(meta_b.shape[1] - count)
             if count % meta_b.shape[1] == 0:
                 random.shuffle(words)
                 count = 0
