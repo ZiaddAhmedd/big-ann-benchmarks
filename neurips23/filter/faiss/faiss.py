@@ -76,38 +76,38 @@ class BinarySignatures:
         TempSetBits = np.zeros(nvec, dtype=int)
         SetWords = set()
 
-        print("############### HASHISH is HERE ################")
-        cnt = 0
+        # print("############### HASHISH is HERE ################")
+        # cnt = 0
 
         while index < nbits:
-            print("index: ",index, "nbits", nbits)
+            # print("index: ",index, "nbits", nbits)
             if count + step > meta_b.shape[1]:
                 step = int(meta_b.shape[1] - count)
             if count % meta_b.shape[1] == 0:
                 random.shuffle(words)
                 count = 0
-                print(89)
+                # print(89)
                 # step = initial_step
             bits = meta_b[:,words[count:count+step]].nonzero()[0]
             TempSetBits[bits] = 1 
 
-            cnt += 1
-            print("bits: ",bits, "TempSetBits: ", TempSetBits)
+            # cnt += 1
+            # print("bits: ",bits, "TempSetBits: ", TempSetBits)
             # if cnt > 15:
             #     break
 
             if np.sum(TempSetBits) < meta_b.shape[0] / 2:
-                print(100)
+                # print(100)
                 SetBits = np.copy(TempSetBits)
                 SetWords = SetWords.union(words[count:count+step])
                 count += step
             else:
-                print(105)
+                # print(105)
                 if step > 1:
                     step = int(step/2) 
                     TempSetBits = np.copy(SetBits)
                 else:
-                    print(110)
+                    # print(110)
                     for w in SetWords:
                         temp[w, index] = True
                     SetBits = np.zeros(meta_b.shape[0], dtype=int)
@@ -115,7 +115,7 @@ class BinarySignatures:
                     SetWords = set()
                     index += 1
 
-                    print("++++++++++++++ INDEX INC ++++++++++++++")
+                    # print("++++++++++++++ INDEX INC ++++++++++++++")
 
                     step = initial_step
         
