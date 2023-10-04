@@ -76,15 +76,15 @@ class BinarySignatures:
         TempSetBits = np.zeros(nvec, dtype=int)
         SetWords = set()
         while index < nbits:
-            if count + step > metadata.shape[1]:
-                step = int(metadata.shape[1] - count)
-            if count % metadata.shape[1] == 0:
+            if count + step > meta_b.shape[1]:
+                step = int(meta_b.shape[1] - count)
+            if count % meta_b.shape[1] == 0:
                 random.shuffle(words)
                 count = 0
                 step = initial_step
-            bits = metadata[:,words[count:count+step]].nonzero()[0]
+            bits = meta_b[:,words[count:count+step]].nonzero()[0]
             TempSetBits[bits] = 1 
-            if np.sum(TempSetBits) < metadata.shape[0] / 2:
+            if np.sum(TempSetBits) < meta_b.shape[0] / 2:
                 SetBits = np.copy(TempSetBits)
                 SetWords = SetWords.union(words[count:count+step])
                 count += step
@@ -95,8 +95,8 @@ class BinarySignatures:
                 else:
                     for w in SetWords:
                         temp[w, index] = True
-                    SetBits = np.zeros(metadata.shape[0], dtype=int)
-                    TempSetBits = np.zeros(metadata.shape[0], dtype=int)
+                    SetBits = np.zeros(meta_b.shape[0], dtype=int)
+                    TempSetBits = np.zeros(meta_b.shape[0], dtype=int)
                     SetWords = set()
                     index += 1
                     step = initial_step
