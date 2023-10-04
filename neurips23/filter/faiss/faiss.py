@@ -76,6 +76,7 @@ class BinarySignatures:
         TempSetBits = np.zeros(nvec, dtype=int)
         SetWords = set()
         print("############### HASHISH is HERE ################")
+        cnt = 0
         while index < nbits:
             print("index: ",index, "nbits", nbits)
             if count + step > meta_b.shape[1]:
@@ -86,8 +87,11 @@ class BinarySignatures:
                 step = initial_step
             bits = meta_b[:,words[count:count+step]].nonzero()[0]
             TempSetBits[bits] = 1 
-            print("index: ",index, "nbits", nbits, "INSIDE ############")
+            cnt += 1
+            print("bits: ",bits, "TempSetBits: ", TempSetBits)
             if np.sum(TempSetBits) < meta_b.shape[0] / 2:
+                if cnt > 15:
+                    break
                 SetBits = np.copy(TempSetBits)
                 SetWords = SetWords.union(words[count:count+step])
                 count += step
