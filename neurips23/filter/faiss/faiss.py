@@ -87,7 +87,7 @@ class BinarySignatures:
                 random.shuffle(words)
                 count = 0
                 print(89)
-                step = initial_step
+                # step = initial_step
             bits = meta_b[:,words[count:count+step]].nonzero()[0]
             TempSetBits[bits] = 1 
 
