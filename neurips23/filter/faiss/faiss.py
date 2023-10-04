@@ -100,6 +100,7 @@ class BinarySignatures:
                     TempSetBits = np.zeros(meta_b.shape[0], dtype=int)
                     SetWords = set()
                     index += 1
+                    print("++++++++++++++ INDEX INC ++++++++++++++")
                     step = initial_step
         
         bitsig = np.packbits(temp, axis=1)
