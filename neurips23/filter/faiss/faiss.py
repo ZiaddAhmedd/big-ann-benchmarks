@@ -93,8 +93,8 @@ class BinarySignatures:
 
             cnt += 1
             print("bits: ",bits, "TempSetBits: ", TempSetBits)
-            if cnt > 15:
-                break
+            # if cnt > 15:
+            #     break
 
             if np.sum(TempSetBits) < meta_b.shape[0] / 2:
                 print(100)
