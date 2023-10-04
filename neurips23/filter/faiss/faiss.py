@@ -2,6 +2,7 @@ import pdb
 import pickle
 import numpy as np
 import os
+import random
 
 from multiprocessing.pool import ThreadPool
 
@@ -63,7 +64,45 @@ class BinarySignatures:
 
         # select binary signatures for the vocabulary
         rs = np.random.RandomState(123)    # we rely on this to be reproducible!
-        bitsig = np.packbits(rs.rand(nword, nbits) < proba_1, axis=1)
+        
+        temp = np.full((nword, nbits), False, dtype=bool)
+        initial_step = 1024
+        random.seed(123)
+        step = initial_step
+        words = [i for i in range(nword)]
+        index = 0
+        count = 0
+        SetBits = np.zeros(nvec, dtype=int)
+        TempSetBits = np.zeros(nvec, dtype=int)
+        SetWords = set()
+        while index < nbits:
+            if count + step > metadata.shape[1]:
+                step = int(metadata.shape[1] - count)
+            if count % metadata.shape[1] == 0:
+                random.shuffle(words)
+                count = 0
+                step = initial_step
+            bits = metadata[:,words[count:count+step]].nonzero()[0]
+            TempSetBits[bits] = 1 
+            if np.sum(TempSetBits) < metadata.shape[0] / 2:
+                SetBits = np.copy(TempSetBits)
+                SetWords = SetWords.union(words[count:count+step])
+                count += step
+            else:
+                if step > 1:
+                    step = int(step/2) 
+                    TempSetBits = np.copy(SetBits)
+                else:
+                    for w in SetWords:
+                        temp[w, index] = True
+                    SetBits = np.zeros(metadata.shape[0], dtype=int)
+                    TempSetBits = np.zeros(metadata.shape[0], dtype=int)
+                    SetWords = set()
+                    index += 1
+                    step = initial_step
+        
+        bitsig = np.packbits(temp, axis=1)
+        #bitsig = np.packbits(rs.rand(nword, nbits) < proba_1, axis=1)
         bitsig = np.pad(bitsig, ((0, 0), (0, 8 - bitsig.shape[1]))).view("int64").ravel()
         self.bitsig = bitsig
 
