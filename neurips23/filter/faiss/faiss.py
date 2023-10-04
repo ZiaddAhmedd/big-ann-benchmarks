@@ -75,6 +75,7 @@ class BinarySignatures:
         SetBits = np.zeros(nvec, dtype=int)
         TempSetBits = np.zeros(nvec, dtype=int)
         SetWords = set()
+        print("############### HASHISH is HERE ################")
         while index < nbits:
             if count + step > meta_b.shape[1]:
                 step = int(meta_b.shape[1] - count)
@@ -100,7 +101,7 @@ class BinarySignatures:
                     SetWords = set()
                     index += 1
                     step = initial_step
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!ANA HENA 3ALA FEKRAA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        
         bitsig = np.packbits(temp, axis=1)
         #bitsig = np.packbits(rs.rand(nword, nbits) < proba_1, axis=1)
         bitsig = np.pad(bitsig, ((0, 0), (0, 8 - bitsig.shape[1]))).view("int64").ravel()
