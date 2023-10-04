@@ -1,5 +1,8 @@
-from benchmark.algorithms.base_runner import BaseRunner
 import time
+
+import psutil
+from benchmark.algorithms.base_runner import BaseRunner
+
 
 class FilterRunner(BaseRunner):
     def run_task(algo, ds, distance, count, run_count, search_type, private_query):
@@ -16,6 +19,7 @@ class FilterRunner(BaseRunner):
         for i in range(run_count):
             print('Run %d/%d...' % (i + 1, run_count))
 
+            print("MEMORY PERCENTAGE!!!!!!!!!!!!!!!!!!!!!!!!",psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
             start = time.time()
             if search_type == "knn":
                 algo.query(X, count)
