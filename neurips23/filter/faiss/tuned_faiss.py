@@ -2,7 +2,8 @@ import pdb
 import pickle
 import numpy as np
 import os
-
+import random
+from scipy.sparse import csr_matrix, tril, save_npz, load_npz
 from multiprocessing.pool import ThreadPool
 
 import faiss
@@ -54,8 +55,8 @@ def csr_to_bitcodes(matrix, bitsig):
 class BinarySignatures:
     """ binary signatures that encode vectors """
 
-    def __init__(self, meta_b, proba_1):
-        nvec, nword = meta_b.shape
+    def __init__(self, metadata):
+        nvec, nword = metadata.shape
         # number of bits reserved for the vector ids
         self.id_bits = int(np.ceil(np.log2(nvec)))
         # number of bits for the binary signature
@@ -63,12 +64,51 @@ class BinarySignatures:
 
         # select binary signatures for the vocabulary
         rs = np.random.RandomState(123)    # we rely on this to be reproducible!
-        bitsig = np.packbits(rs.rand(nword, nbits) < proba_1, axis=1)
+        
+        temp = np.full((nword, nbits), False, dtype=bool)
+        initial_step = 1024
+        random.seed(123)
+        step = initial_step
+        words = [i for i in range(nword)]
+        index = 0
+        count = 0
+        SetBits = np.zeros(nvec, dtype=int)
+        TempSetBits = np.zeros(nvec, dtype=int)
+        SetWords = set()
+        while index < nbits:
+            #print(index, step, np.sum(TempSetBits))
+            if count + step > metadata.shape[1]:
+                step = int(metadata.shape[1] - count)
+            if count % metadata.shape[1] == 0:
+                random.shuffle(words)
+                count = 0
+                step = initial_step
+            bits = metadata[:,words[count:count+step]].nonzero()[0]
+            TempSetBits[bits] = 1 
+            if np.sum(TempSetBits) < metadata.shape[0] / 2:
+                SetBits = np.copy(TempSetBits)
+                SetWords = SetWords.union(words[count:count+step])
+                count += step
+            else:
+                if step > 1:
+                    step = int(step/2) 
+                    TempSetBits = np.copy(SetBits)
+                else:
+                    for w in SetWords:
+                        temp[w, index] = True
+                    SetBits = np.zeros(metadata.shape[0], dtype=int)
+                    TempSetBits = np.zeros(metadata.shape[0], dtype=int)
+                    SetWords = set()
+                    index += 1
+                    step = initial_step
+        
+        bitsig = np.packbits(temp, axis=1)
+        #bitsig = np.packbits(rs.rand(nword, nbits) < proba_1, axis=1)
         bitsig = np.pad(bitsig, ((0, 0), (0, 8 - bitsig.shape[1]))).view("int64").ravel()
         self.bitsig = bitsig
 
         # signatures for all the metadata matrix
-        self.db_sig = csr_to_bitcodes(meta_b, bitsig) << self.id_bits
+        self.db_sig = csr_to_bitcodes(metadata, bitsig) << self.id_bits
 
         # mask to keep only the ids
         self.id_mask = (1 << self.id_bits) - 1
@@ -80,7 +120,7 @@ class BinarySignatures:
             sig |= self.bitsig[w2]
         return int(sig << self.id_bits)
 
-class FAISS(BaseFilterANN):
+class Tuned_FAISS(BaseFilterANN):
 
     def __init__(self,  metric, index_params):
         self._index_params = index_params
@@ -88,7 +128,6 @@ class FAISS(BaseFilterANN):
         print(index_params)
         self.indexkey = index_params.get("indexkey", "IVF32768,SQ8")
         self.binarysig = index_params.get("binarysig", True)
-        self.binarysig_proba1 = index_params.get("binarysig_proba1", 0.1)
         self.metadata_threshold = 1e-3
         self.nt = index_params.get("threads", 1)
     
@@ -98,7 +137,9 @@ class FAISS(BaseFilterANN):
         if ds.search_type() == "knn_filtered" and self.binarysig:
             print("preparing binary signatures")
             meta_b = ds.get_dataset_metadata()
-            self.binsig = BinarySignatures(meta_b, self.binarysig_proba1)
+            self.frequency_matrix = tril(meta_b.transpose() @ meta_b)
+            save_npz(self.frequency_matrix_name(dataset), self.frequency_matrix)
+            self.binsig = BinarySignatures(meta_b)
             print("writing to", self.binarysig_name(dataset))
             pickle.dump(self.binsig, open(self.binarysig_name(dataset), "wb"), -1)
         else:
@@ -133,6 +174,9 @@ class FAISS(BaseFilterANN):
     
     def binarysig_name(self, name):
         return f"data/{name}.{self.indexkey}.binarysig"
+        
+    def frequency_matrix_name(self, name):
+        return f"data/{name}.{self.indexkey}.frequency_matrix.npz"
 
 
     def load_index(self, dataset):
@@ -163,10 +207,17 @@ class FAISS(BaseFilterANN):
             if not os.path.exists(self.binarysig_name(dataset)):
                 print("preparing binary signatures")
                 meta_b = ds.get_dataset_metadata()
-                self.binsig = BinarySignatures(meta_b, self.binarysig_proba1)
+                self.binsig = BinarySignatures(meta_b)
             else:
                 print("loading binary signatures")
                 self.binsig = pickle.load(open(self.binarysig_name(dataset), "rb"))
+            if not os.path.exists(self.frequency_matrix_name(dataset)):
+                print("preparing frequecy matrix")
+                meta_b = ds.get_dataset_metadata()
+                self.frequency_matrix = tril(meta_b.transpose() @ meta_b)
+            else:
+                print("loading frequency matrix")
+                self.frequency_matrix = load_npz(self.frequency_matrix_name(dataset))
         else:
             self.binsig = None
 
@@ -205,23 +256,27 @@ class FAISS(BaseFilterANN):
         nq = X.shape[0]
         self.I = -np.ones((nq, k), dtype='int32')
         meta_b = self.meta_b
+        frequency_matrix = self.frequency_matrix
         meta_q = filter
         docs_per_word = meta_b.T.tocsr()
-        ndoc_per_word = docs_per_word.indptr[1:] - docs_per_word.indptr[:-1]
-        freq_per_word = ndoc_per_word / self.nb
+        threshold = self.metadata_threshold * self.nb
         
         def process_one_row(q):
             faiss.omp_set_num_threads(1)
             qwords = csr_get_row_indices(meta_q, q)
             assert qwords.size in (1, 2)
             w1 = qwords[0]
-            freq = freq_per_word[w1]
+            freq = 0
             if qwords.size == 2:
                 w2 = qwords[1]
-                freq *= freq_per_word[w2]
+                if w1 > w2:
+                    freq = frequency_matrix[w1, w2]
+                else:
+                    freq = frequency_matrix[w2, w1]
             else:
                 w2 = -1
-            if freq < self.metadata_threshold:
+                freq = frequency_matrix[w1, w1]
+            if freq < threshold:
                 # metadata first
                 docs = csr_get_row_indices(docs_per_word, w1)
                 if w2 != -1:

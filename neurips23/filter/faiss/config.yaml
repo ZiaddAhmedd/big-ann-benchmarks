@@ -42,7 +42,7 @@ yfcc-10M:
     faiss:
       docker-tag: neurips23-filter-faiss
       module: neurips23.filter.faiss.faiss
-      constructor: FAISS
+      constructor: Tuned_FAISS
       base-args: ["@metric"]
       run-groups:
         base:
