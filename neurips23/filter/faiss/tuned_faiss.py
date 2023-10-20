@@ -2,8 +2,9 @@ import pdb
 import pickle
 import numpy as np
 import os
+import gc
 import random
-from scipy.sparse import csr_matrix, tril, save_npz, load_npz
+from scipy.sparse import csr_matrix, tril, lil_matrix, save_npz, load_npz
 from multiprocessing.pool import ThreadPool
 
 import faiss
@@ -132,13 +133,31 @@ class Tuned_FAISS(BaseFilterANN):
         self.nt = index_params.get("threads", 1)
     
 
+    def construct_frequency_matrix(self, metadata):
+        max_th = 100000 # 0.01 * meta_b.shape[0]
+        nvec, nword = metadata.shape
+        self.frequency_matrix = lil_matrix((nword,nword),dtype=np.uint32)
+        for i in range(100):
+            begin = int(i * nvec / 100)
+            end = int((i + 1) * nvec / 100)    
+            self.frequency_matrix = self.frequency_matrix + (metadata[begin:end,:].transpose() @ metadata[begin:end,:]).tolil()
+    
+        self.frequency_matrix = tril(self.frequency_matrix.tocsr()).tocsr()
+        self.frequency_matrix.data[self.frequency_matrix.data > max_th] = 0
+        self.frequency_matrix.data[self.frequency_matrix.data < 10] = 0
+        self.frequency_matrix.eliminate_zeros()
+        gc.collect()
+        
+
     def fit(self, dataset):
         ds = DATASETS[dataset]()
         if ds.search_type() == "knn_filtered" and self.binarysig:
             print("preparing binary signatures")
             meta_b = ds.get_dataset_metadata()
-            self.frequency_matrix = tril(meta_b.transpose() @ meta_b)
+            # Constructing the frequency matrix
+            self.construct_frequency_matrix(meta_b)
             save_npz(self.frequency_matrix_name(dataset), self.frequency_matrix)
+            
             self.binsig = BinarySignatures(meta_b)
             print("writing to", self.binarysig_name(dataset))
             pickle.dump(self.binsig, open(self.binarysig_name(dataset), "wb"), -1)
@@ -204,6 +223,13 @@ class Tuned_FAISS(BaseFilterANN):
         ds = DATASETS[dataset]()
 
         if ds.search_type() == "knn_filtered" and self.binarysig:
+            if not os.path.exists(self.frequency_matrix_name(dataset)):
+                print("preparing frequecy matrix")
+                meta_b = ds.get_dataset_metadata()
+                self.construct_frequency_matrix(meta_b)
+            else:
+                print("loading frequency matrix")
+                self.frequency_matrix = load_npz(self.frequency_matrix_name(dataset))
             if not os.path.exists(self.binarysig_name(dataset)):
                 print("preparing binary signatures")
                 meta_b = ds.get_dataset_metadata()
@@ -211,13 +237,6 @@ class Tuned_FAISS(BaseFilterANN):
             else:
                 print("loading binary signatures")
                 self.binsig = pickle.load(open(self.binarysig_name(dataset), "rb"))
-            if not os.path.exists(self.frequency_matrix_name(dataset)):
-                print("preparing frequecy matrix")
-                meta_b = ds.get_dataset_metadata()
-                self.frequency_matrix = tril(meta_b.transpose() @ meta_b)
-            else:
-                print("loading frequency matrix")
-                self.frequency_matrix = load_npz(self.frequency_matrix_name(dataset))
         else:
             self.binsig = None
 
@@ -276,7 +295,7 @@ class Tuned_FAISS(BaseFilterANN):
             else:
                 w2 = -1
                 freq = frequency_matrix[w1, w1]
-            if freq < threshold:
+            if freq < threshold and frequency >= k:
                 # metadata first
                 docs = csr_get_row_indices(docs_per_word, w1)
                 if w2 != -1:
