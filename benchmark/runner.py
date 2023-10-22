@@ -72,9 +72,6 @@ def run(definition, dataset, count, run_count, rebuild,
                           else custom_runner.build(algo, dataset, max_pts))
             print('Built index in', build_time) 
         else:
-            build_time = (custom_runner.build(algo,dataset)
-                        if neurips23track != 'streaming' 
-                        else custom_runner.build(algo, dataset, max_pts))
             print("Loaded existing index")
 
 

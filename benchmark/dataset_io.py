@@ -100,7 +100,7 @@ def xbin_mmap(fname, dtype, maxn=-1):
     #    print("Warning: xbin_mmap map returned d=%s, but overridig with %d" % (d, override_d))
     #    d = override_d
     # HACK
-
+    print(os.stat(fname).st_size,8 + n * d * np.dtype(dtype).itemsize)
     assert os.stat(fname).st_size == 8 + n * d * np.dtype(dtype).itemsize
     if maxn > 0:
         n = min(n, maxn)

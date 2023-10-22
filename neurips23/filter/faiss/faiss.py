@@ -55,8 +55,8 @@ def csr_to_bitcodes(matrix, bitsig):
 class BinarySignatures:
     """ binary signatures that encode vectors """
 
-    def __init__(self, meta_b, proba_1):
-        nvec, nword = meta_b.shape
+    def __init__(self, metadata, proba_1):
+        nvec, nword = metadata.shape
         # number of bits reserved for the vector ids
         self.id_bits = int(np.ceil(np.log2(nvec)))
         # number of bits for the binary signature
@@ -75,49 +75,31 @@ class BinarySignatures:
         SetBits = np.zeros(nvec, dtype=int)
         TempSetBits = np.zeros(nvec, dtype=int)
         SetWords = set()
-
-        # print("############### HASHISH is HERE ################")
-        # cnt = 0
-
         while index < nbits:
-            # print("index: ",index, "nbits", nbits)
-            if count + step > meta_b.shape[1]:
-                pass
-                # step = int(meta_b.shape[1] - count)
-            if count % meta_b.shape[1] == 0:
+            #print(index, step, np.sum(TempSetBits))
+            if count + step > metadata.shape[1]:
+                step = int(metadata.shape[1] - count)
+            if count % metadata.shape[1] == 0:
                 random.shuffle(words)
                 count = 0
-                # print(89)
-                # step = initial_step
-            bits = meta_b[:,words[count:count+step]].nonzero()[0]
+                step = initial_step
+            bits = metadata[:,words[count:count+step]].nonzero()[0]
             TempSetBits[bits] = 1 
-
-            # cnt += 1
-            # print("bits: ",bits, "TempSetBits: ", TempSetBits)
-            # if cnt > 15:
-            #     break
-
-            if np.sum(TempSetBits) < meta_b.shape[0] / 2:
-                # print(100)
+            if np.sum(TempSetBits) < metadata.shape[0] / 2:
                 SetBits = np.copy(TempSetBits)
                 SetWords = SetWords.union(words[count:count+step])
                 count += step
             else:
-                # print(105)
                 if step > 1:
                     step = int(step/2) 
                     TempSetBits = np.copy(SetBits)
                 else:
-                    # print(110)
                     for w in SetWords:
                         temp[w, index] = True
-                    SetBits = np.zeros(meta_b.shape[0], dtype=int)
-                    TempSetBits = np.zeros(meta_b.shape[0], dtype=int)
+                    SetBits = np.zeros(metadata.shape[0], dtype=int)
+                    TempSetBits = np.zeros(metadata.shape[0], dtype=int)
                     SetWords = set()
                     index += 1
-
-                    # print("++++++++++++++ INDEX INC ++++++++++++++")
-
                     step = initial_step
         
         bitsig = np.packbits(temp, axis=1)
@@ -126,7 +108,7 @@ class BinarySignatures:
         self.bitsig = bitsig
 
         # signatures for all the metadata matrix
-        self.db_sig = csr_to_bitcodes(meta_b, bitsig) << self.id_bits
+        self.db_sig = csr_to_bitcodes(metadata, bitsig) << self.id_bits
 
         # mask to keep only the ids
         self.id_mask = (1 << self.id_bits) - 1
@@ -341,5 +323,3 @@ class FAISS(BaseFilterANN):
 
     def __str__(self):
         return f'Faiss({self.indexkey, self.qas})'
-
-   
